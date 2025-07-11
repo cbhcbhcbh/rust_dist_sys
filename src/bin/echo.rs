@@ -1,24 +1,8 @@
-use std::io::{StdoutLock, Write};
-
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
+use std::io::{StdoutLock, Write};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Message {
-    src: String,
-    #[serde(rename = "dest")]
-    dst: String,
-    body: Body,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Body {
-    #[serde(rename = "msg_id")]
-    id: usize,
-    in_reply_to: usize,
-    #[serde(flatten)]
-    msg_type: MessageType,
-}
+use rust_dist_sys::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -40,8 +24,8 @@ struct EchoNode {
     id: usize,
 }
 
-impl EchoNode {
-    pub fn step(&mut self, input: Message, output: &mut StdoutLock) -> anyhow::Result<()> {
+impl Node<MessageType> for EchoNode {
+    fn step(&mut self, input: Message<MessageType>, output: &mut StdoutLock) -> anyhow::Result<()> {
         match input.body.msg_type {
             MessageType::Init { .. } => {
                 let reply = Message {
@@ -82,19 +66,5 @@ impl EchoNode {
 }
 
 fn main() -> anyhow::Result<()> {
-    let stdin = std::io::stdin().lock();
-    let mut stdout = std::io::stdout().lock();
-
-    let inputs = serde_json::Deserializer::from_reader(stdin).into_iter::<Message>();
-
-    let mut state = EchoNode { id: 0 };
-
-    for input in inputs {
-        let input = input.context("Maelstrom input from STDIN could not be deserialized")?;
-        state
-            .step(input, &mut stdout)
-            .context("Node step function failed")?;
-    }
-
-    Ok(())
+    main_loop(EchoNode { id: 0 })
 }
